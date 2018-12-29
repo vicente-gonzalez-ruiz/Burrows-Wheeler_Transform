@@ -1,0 +1,281 @@
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "<none>"
+%%% End:
+
+\title{Burrows-Wheeler Transform (BWT)}
+
+\author{Vicente González Ruiz}
+
+\maketitle
+
+\section{Intro}
+\begin{itemize}
+\item \href{https://scholar.google.es/scholar?hl=es\&as_sdt=0\%2C5\&q=Burrows+M\%2C+Wheeler+DJ\%3A+A+Block+Sorting+Lossless+Data+Compression+Algorithm.\&btnG=}{BWT} is an algorithm that inputs a string and outputs:
+
+  \begin{enumerate}
+  \tightlist
+  \item
+    A different string with the same symbols but with longer runs, and
+    therefore potentially more compressible. The lengths of the runs
+    are proportional to the correlation among symbols and the length
+    of the input.
+  \item
+    An index.
+  \end{enumerate}
+\item
+  The inverse transform, using the output of the forward transform,
+  recover the original string.
+\item
+  Used in \href{https://en.wikipedia.org/wiki/Bzip2}{\texttt{bzip2}}.
+\end{itemize}
+
+\section{Encoder}\label{encoder}
+
+Let \(B\) the block-size in symbols:
+
+\begin{enumerate}
+\tightlist
+\item
+  While the input is not exhausted:
+  \begin{enumerate}
+  \tightlist
+  \item
+    Read \(B\) symbols in \texttt{S}.
+  \item
+    (\texttt{L}, \texttt{I}) = BWT(\texttt{S}).
+  \item
+    Output \texttt{L} (the output block with longer runs) and \texttt{I}
+    (an index of a symbol in \texttt{L}).
+  \end{enumerate}
+\end{enumerate}
+
+\section{Decoder}
+
+\begin{enumerate}
+\tightlist
+\item
+  While input pairs (\texttt{L}, \texttt{I}):
+  \begin{enumerate}
+  \tightlist
+  \item
+    \texttt{S} = iBWT(\texttt{L}, \texttt{I}).
+  \item
+    Output \texttt{S}.
+  \end{enumerate}
+\end{enumerate}
+
+\subsection{Forward BWT}
+
+\begin{enumerate}
+\item
+  Input \texttt{S}, the sequence of \texttt{B} symbols.
+  \texttt{S\ =\ "abraca."}
+\item
+  Compute a matrix \texttt{M'} with all possible cyclic
+  rotations of \texttt{S}.
+
+\begin{verbatim}
+M' = ["abraca.",
+      "braca.a",
+      "raca.ab",
+      "aca.abr",
+      "ca.abra",
+      "a.abrac",
+      ".abraca"]
+\end{verbatim}
+\item
+  Sort lexicographically \texttt{M'} go generate
+\begin{verbatim}
+M = [".abraca",
+     "a.abrac",
+     "abraca.",
+     "aca.abr",
+     "braca.a",
+     "ca.abra",
+     "raca.ab"]
+\end{verbatim}
+\item
+  Let \texttt{I} the index of \texttt{S} in \texttt{M}. \texttt{I\ =\ 2}
+\item
+  Let \texttt{L} the column \texttt{B}-1 of \texttt{M}.
+  \texttt{L\ =\ "ac.raab"}
+\item
+  Output \texttt{I} and \texttt{L}.
+\end{enumerate}
+
+\section{Inverse BWT}
+
+The backward transform regenerates the \texttt{I}-th row of \texttt{M}.
+Here there is an example:
+
+\begin{enumerate}
+\item
+  Input \texttt{I} and \texttt{L}, the output of a BWT applied to a
+  string \texttt{S} of length \texttt{B}.
+\item
+  The first \texttt{F} and the last \texttt{L} columns of \texttt{M} are
+  available taking into consideration that \texttt{F=sorted(L)}.
+\begin{verbatim}
+    F23456L
+    .     a
+    a     c
+    a     .
+    a     r
+    b     a
+    c     a
+    r     b
+\end{verbatim}
+
+\item
+  Notice that for a particular symbol in \texttt{L}, the corresponding
+  symbol in \texttt{F} follow it in \texttt{S} (for example, \texttt{r}
+  follows \texttt{b} in \texttt{abraca.}). Therefore, we have found all
+  pairs of \texttt{S} by taking pairs of \texttt{LF}.
+\begin{verbatim}
+    a.
+    ca
+    .a
+    ra
+    ab
+    ac
+    br
+\end{verbatim}
+Which sorted:
+\begin{verbatim}
+    .a
+    a.
+    ab
+    ac
+    br
+    ca
+    ra
+\end{verbatim}
+  become the first two columns of \texttt{M}.
+\item
+  Repeat the process until getting the rest of the columns of \texttt{M}
+  (here only a few are shown):
+
+\begin{verbatim}
+    F23456L
+    .a    a
+    a.    c
+    ab    .
+    ac    r
+    br    a
+    ca    a
+    ra    b
+\end{verbatim}
+
+  Now, for a particular symbol in \texttt{L}, the corresponding pair in
+  columns \texttt{F} and \texttt{2} follows it in \texttt{S} (for
+  example, pair \texttt{br} follows symbol \texttt{a} in
+  \texttt{abraca.}). So, we can find all triples of \texttt{S} by
+  tacking triples of \texttt{LF2}:
+\begin{verbatim}
+    a.a         .ab
+    ac.         a.a
+    .ab  sort   abr
+    rac ------> aca
+    abr         bra
+    aca         ca.
+    bra         rac
+\end{verbatim}
+to have the partial reconstruction of \texttt{M}:
+\begin{verbatim}
+    F23456L
+    .ab   a
+    a.a   c
+    abr   . <- I
+    aca   a
+    bra   a
+    ca.   a
+    rac   b
+\end{verbatim}
+
+\end{enumerate}
+
+In an optimized implementation of the BWT, only the row \texttt{I} is
+generated.
+\begin{comment}
+<!--
+2. Let be $F=\text{sorted}(L)$, the first column of the matrix $M$ computed by $\text{BWT}(S)$. $L$ is the first column of a matrix
+<br/>
+<br/>
+$$M'=[[M[i,(j-1)\%n]~\text{for}~j~\text{in}~\text{range}(n)]~\text{for}~i~\text{in}~\text{range}(n)],$$
+<br/>
+formed by rotating each row of $M$ one character to the right. By rows, $M'$ is sorted lexicographically starting with their second character.
+    ```
+    S = "abraca" L = "caraab" F = "aaabcr" M = ["aabrac", M' = ["caabra",
+                                                "abraca",       "aabrac",
+                                                "acaabr",       "racaab",
+                                                "bracaa",       "abraca",
+                                                "caabra",       "acaabr",
+                                                "racaab"]       "bracaa"]
+    ```
+If we consider only those rows in $M'$ that start with a character *ch* (`a` for example), they must appear in lexicographical order relative to one another, because they have been sorted lexicographically starting with their second characters, and their first characters are all the same. Therefore, for any given character *ch*, the rows in $M$ that begin with *ch* appear in the same order as the rows in $M'$ that begin with *ch*.
+
+3. Using $F$ and $L$, the first columns of $M$ and $M'$ respectively, we calculate a vector $T$ that indicates the correspondence between the rows of the two matrices, in the sense that
+<br/>
+<br/>
+$$
+M'[j] == M[T[j]],~\text{for}~j~\text{in}~\text{range}(n),
+$$
+<br/>
+which in terms of $F$ and $L$ corresponds to
+<br/>
+<br/>
+$$
+L[j] == F[T[j]],~\text{for}~j~\text{in}~\text{range}(n).
+$$
+    ```
+    T = [4, 0, 5, 1, 2, 3] # Rows of M' in M
+    ```
+
+4. Since each row in $M$ is a rotation of $S$, the character $L[i]$ cyclicly precedes the character $F[i]$ in $S$.
+    ```
+    L[0] = "c" precedes F[0] = "a" in S = "abraca"
+    ```
+   If we take $i=T[j]$, $L[T[j]]$ cyclicly precedes $F[T[j]]=L[j]$ in $S$. Sumarizing:
+   <br/>
+   <br/>
+   $$
+   L[T[j]]~\text{cyclicly precedes}~L[j]~\text{in}~S,~\text{for}~j~\text{in}~\text{range}(n).
+   $$
+   <br/>
+   Remember, the index $I$ is defined such that row $I$ of $M$ is $S$. Thus, the last character of $S$ is $L[I]$.
+   ```
+   S[n-1] = "a" = L[1]
+   ```
+   We can use the vector T to give the predecessors of each character, by defining:
+   <br/>
+   <br/>
+   $$
+   S[n-1-i] = L[T^i[I]], ~\text{for}~i~\text{in}~\text{range}(n)
+   $$
+   <br/>
+   where $T^0[x]=x$ and $T^{i+1}[x] = T[T^i[x]]$. This is equivalent to reconstruct the reverse of $S$,
+   traveling $L$ as defined by `Tx`:
+   ```
+   Tx = [I]
+   for i in range(1, n):
+        Tx.append(T[Tx[i-1]])
+   ```
+   This computes:
+   ```
+   Tx[0] = 1                            T  = [4, 0, 5, 1, 2, 3]
+   Tx[1] = T[Tx[0]] = T[1] = 0          Tx = [1, 0, 4, 2, 5, 3]
+   Tx[2] = T[Tx[1]] = T[0] = 4                0  1  2  3  4  5
+   Tx[3] = T[Tx[2]] = T[4] = 2
+   Tx[4] = T[Tx[3]] = T[2] = 5
+   Tx[5] = T[Tx[4]] = T[5] = 3
+   ```
+   Finally:
+   ```
+   Reversed S = L[1], L[0], L[4], L[2], L[5], L[3] = a, c, a, r, b, a
+                                                 S = a, b, r, a, c, a
+   ```
+\end{comment}
+
+\subsection{Lab}
+\href{https://nbviewer.jupyter.org/github/vicente-gonzalez-ruiz/Burrows-Wheeler_transform/blob/master/BWT.ipynb}{IPython notebook}
